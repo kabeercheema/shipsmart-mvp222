@@ -1,7 +1,8 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
-import { prisma } from "./prisma";
+
+const authDisabled = process.env.AUTH_DISABLED === "true";
 
 export const { 
   auth, 
@@ -17,9 +18,15 @@ export const {
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
+        if (authDisabled) {
+          throw new Error("Auth is disabled");
+        }
+
         if (!credentials?.email || !credentials?.password) {
           throw new Error("Email and password required");
         }
+
+        const { prisma } = await import("./prisma");
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email }
@@ -52,14 +59,26 @@ export const {
   },
   callbacks: {
     async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
+      try {
+        if (user?.id) {
+          token.id = user.id;
+        }
+      } catch (error) {
+        console.error("[Auth][jwt] callback error", {
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
       }
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
+      try {
+        if (session?.user && typeof token?.id === "string") {
+          session.user.id = token.id;
+        }
+      } catch (error) {
+        console.error("[Auth][session] callback error", {
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
       }
       return session;
     }

@@ -4,9 +4,18 @@ import type { NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const authDisabled = process.env.AUTH_DISABLED === "true";
+
+  if (authDisabled) {
+    return NextResponse.next();
+  }
 
   // Never block internal auth/public endpoints in proxy.
-  if (pathname.startsWith("/api/auth") || pathname.startsWith("/api/public")) {
+  if (
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/public") ||
+    pathname.startsWith("/api/shipping/calculate-rates")
+  ) {
     return NextResponse.next();
   }
 
