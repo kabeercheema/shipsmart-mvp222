@@ -49,6 +49,8 @@ export function RateComparison({
         const isSelected = selectedRate === rateId;
         const isCheapest = index === 0;
         const isFastest = fastestRate && rateId === `${fastestRate.carrier}-${fastestRate.service}`;
+        const currentRate = Number.isFinite(rate.rate) ? rate.rate : 0;
+        const cheapestBaseRate = Number.isFinite(rates[0]?.rate) ? (rates[0]?.rate as number) : 0;
 
         return (
           <Card
@@ -94,10 +96,10 @@ export function RateComparison({
 
               <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <p className="text-2xl font-bold">${rate.rate.toFixed(2)}</p>
+                  <p className="text-2xl font-bold">${currentRate.toFixed(2)}</p>
                   {!isCheapest && (
                     <p className="text-xs text-muted-foreground">
-                      ${(rate.rate - rates[0].rate).toFixed(2)} more
+                      ${(currentRate - cheapestBaseRate).toFixed(2)} more
                     </p>
                   )}
                 </div>

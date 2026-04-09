@@ -534,13 +534,13 @@ export default function CreateLabelPage() {
                   {selectedRateData && (
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-semibold">{selectedRateData.name}</p>
+                        <p className="font-semibold">{selectedRateData.service}</p>
                         <p className="text-sm text-muted-foreground">
-                          {selectedRateData.deliveryDays}
+                          {selectedRateData.estimatedDays} business day{selectedRateData.estimatedDays !== 1 ? "s" : ""}
                         </p>
                       </div>
                       <p className="text-2xl font-bold">
-                        ${selectedRateData.price.toFixed(2)}
+                        ${(selectedRateData.rate ?? 0).toFixed(2)}
                       </p>
                     </div>
                   )}

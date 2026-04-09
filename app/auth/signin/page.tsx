@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,13 +25,13 @@ export default function SignInPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/signin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+      const result = await signIn("credentials", {
+        email: formData.email,
+        password: formData.password,
+        redirect: false,
       });
 
-      if (!response.ok) {
+      if (!result || result.error) {
         throw new Error("Invalid email or password");
       }
 
@@ -40,6 +41,7 @@ export default function SignInPage() {
       });
 
       router.push("/dashboard");
+      router.refresh();
     } catch (error) {
       console.error("Sign in error:", error);
       toast({

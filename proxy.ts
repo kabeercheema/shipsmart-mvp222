@@ -3,21 +3,24 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
-  const session = await auth();
+  const { pathname } = request.nextUrl;
+
+  // Never block internal auth/public endpoints in proxy.
+  if (pathname.startsWith("/api/auth") || pathname.startsWith("/api/public")) {
+    return NextResponse.next();
+  }
 
   // Protect dashboard routes
-  if (request.nextUrl.pathname.startsWith("/dashboard")) {
+  if (pathname.startsWith("/dashboard")) {
+    const session = await auth();
     if (!session) {
       return NextResponse.redirect(new URL("/auth/signin", request.url));
     }
   }
 
   // Protect API routes (except auth and public endpoints)
-  if (
-    request.nextUrl.pathname.startsWith("/api") &&
-    !request.nextUrl.pathname.startsWith("/api/auth") &&
-    !request.nextUrl.pathname.startsWith("/api/public")
-  ) {
+  if (pathname.startsWith("/api")) {
+    const session = await auth();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
