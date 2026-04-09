@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+
+const authDisabled = process.env.AUTH_DISABLED === "true";
 
 export async function GET(request: NextRequest) {
   try {
+    if (authDisabled) {
+      return NextResponse.json({
+        totalOrders: 0,
+        totalLabels: 0,
+        pendingOrders: 0,
+        labeledOrders: 0,
+        shippedOrders: 0,
+        subscriptionTier: "STARTER",
+        recentOrders: [],
+      });
+    }
+
     const session = await auth();
     
     if (!session?.user?.id) {
@@ -12,6 +25,8 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    const { prisma } = await import("@/lib/prisma");
 
     // Get stats
     const orders = await prisma.order.findMany({
