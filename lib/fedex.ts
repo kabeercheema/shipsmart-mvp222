@@ -159,10 +159,40 @@ async function getFedExAccessToken(config: FedExConfig): Promise<string> {
 function extractRateAmount(rateReplyDetail: any): number | null {
   const ratedDetails: any[] = rateReplyDetail?.ratedShipmentDetails ?? [];
 
+  const toNumber = (value: unknown): number | null => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+
+    return null;
+  };
+
   for (const detail of ratedDetails) {
-    const amount = detail?.totalNetCharge?.amount ?? detail?.shipmentRateDetail?.totalNetCharge?.amount;
-    if (typeof amount === "number" && Number.isFinite(amount)) {
-      return amount;
+    const candidates = [
+      detail?.totalNetCharge,
+      detail?.totalNetFedExCharge,
+      detail?.totalNetCharge?.amount,
+      detail?.totalNetFedExCharge?.amount,
+      detail?.shipmentRateDetail?.totalNetCharge,
+      detail?.shipmentRateDetail?.totalNetFedExCharge,
+      detail?.shipmentRateDetail?.totalNetCharge?.amount,
+      detail?.shipmentRateDetail?.totalNetFedExCharge?.amount,
+      detail?.ratedPackages?.[0]?.packageRateDetail?.netCharge,
+      detail?.ratedPackages?.[0]?.packageRateDetail?.netFedExCharge,
+    ];
+
+    for (const candidate of candidates) {
+      const amount = toNumber(candidate);
+      if (amount !== null) {
+        return amount;
+      }
     }
   }
 

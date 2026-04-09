@@ -88,7 +88,16 @@ export default function CreateLabelPage() {
         })
       });
 
-      if (!response.ok) throw new Error("Failed to calculate rates");
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null) as
+          | { error?: string; reason?: string; provider?: string; code?: string }
+          | null;
+
+        const errorMessage =
+          errorPayload?.reason || errorPayload?.error || "Failed to calculate rates";
+
+        throw new Error(errorMessage);
+      }
 
       const data = await response.json();
       const formattedRates = data.rates.map((r: ShippingRate) => ({

@@ -74,6 +74,7 @@ function getEstimatedDays(service: string): number {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as RateRequest;
+    const fedexRequireLive = process.env.FEDEX_REQUIRE_LIVE !== "false";
 
     if (!body.weight || body.weight <= 0) {
       return NextResponse.json(
@@ -84,10 +85,25 @@ export async function POST(request: NextRequest) {
 
     console.log("[Rates API] Request - From:", body.fromZip, "To:", body.toZip, "Weight:", body.weight);
 
-    // Start with baseline mock rates for all carriers.
+    // Start with baseline mock rates for non-FedEx carriers only.
     const mockRates = getMockRates(body);
-    let rates = mockRates;
+    const nonFedExMock = mockRates.filter((r) => r.carrier.toLowerCase() !== "fedex");
+    let rates = nonFedExMock;
     let fedexLive = false;
+    let fedexErrorMessage: string | null = null;
+
+    if (!isFedExConfigured()) {
+      const errorPayload = {
+        error: "FedEx live rates are unavailable because FedEx credentials are not configured",
+        provider: "fedex",
+        code: "FEDEX_NOT_CONFIGURED",
+        fedexLive,
+      };
+
+      if (fedexRequireLive) {
+        return NextResponse.json(errorPayload, { status: 503 });
+      }
+    }
 
     if (isFedExConfigured()) {
       try {
@@ -101,12 +117,40 @@ export async function POST(request: NextRequest) {
         });
 
         if (fedexLiveRates.length > 0) {
-          const nonFedExMock = mockRates.filter((r) => r.carrier.toLowerCase() !== "fedex");
           rates = [...nonFedExMock, ...fedexLiveRates];
           fedexLive = true;
+        } else {
+          fedexErrorMessage = "FedEx returned no rates for this shipment";
+          if (fedexRequireLive) {
+            return NextResponse.json(
+              {
+                error: fedexErrorMessage,
+                provider: "fedex",
+                code: "FEDEX_NO_RATES",
+                fedexLive,
+              },
+              { status: 502 }
+            );
+          }
         }
       } catch (fedexError) {
-        console.error("[Rates API] FedEx live rates failed, falling back to mock rates:", fedexError);
+        fedexErrorMessage = fedexError instanceof Error ? fedexError.message : "Unknown FedEx error";
+        console.error("[Rates API] FedEx live rates failed:", {
+          message: fedexErrorMessage,
+        });
+
+        if (fedexRequireLive) {
+          return NextResponse.json(
+            {
+              error: "FedEx live rates request failed",
+              provider: "fedex",
+              code: "FEDEX_LIVE_REQUEST_FAILED",
+              reason: fedexErrorMessage,
+              fedexLive,
+            },
+            { status: 502 }
+          );
+        }
       }
     }
 
@@ -119,6 +163,9 @@ export async function POST(request: NextRequest) {
       rates: rates,
       bestRate: rates[0],
       fedexLive,
+      fedexSource: fedexLive ? "live" : "none",
+      fedexRateCount: rates.filter((r) => r.carrier.toLowerCase() === "fedex").length,
+      fedexErrorMessage,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
