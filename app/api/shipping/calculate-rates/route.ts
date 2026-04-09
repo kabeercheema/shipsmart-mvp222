@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getFedExRates, isFedExConfigured } from "@/lib/fedex";
 
 interface RateRequest {
   weight: number;
@@ -74,10 +75,40 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as RateRequest;
 
+    if (!body.weight || body.weight <= 0) {
+      return NextResponse.json(
+        { error: "Weight must be greater than 0" },
+        { status: 400 }
+      );
+    }
+
     console.log("[Rates API] Request - From:", body.fromZip, "To:", body.toZip, "Weight:", body.weight);
 
-    // Get mock rates for all carriers
-    const rates = getMockRates(body);
+    // Start with baseline mock rates for all carriers.
+    const mockRates = getMockRates(body);
+    let rates = mockRates;
+    let fedexLive = false;
+
+    if (isFedExConfigured()) {
+      try {
+        const fedexLiveRates = await getFedExRates({
+          fromZip: body.fromZip,
+          toZip: body.toZip,
+          weight: body.weight,
+          length: body.length,
+          width: body.width,
+          height: body.height,
+        });
+
+        if (fedexLiveRates.length > 0) {
+          const nonFedExMock = mockRates.filter((r) => r.carrier.toLowerCase() !== "fedex");
+          rates = [...nonFedExMock, ...fedexLiveRates];
+          fedexLive = true;
+        }
+      } catch (fedexError) {
+        console.error("[Rates API] FedEx live rates failed, falling back to mock rates:", fedexError);
+      }
+    }
 
     // Sort by price (ascending)
     rates.sort((a, b) => a.rate - b.rate);
@@ -87,6 +118,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       rates: rates,
       bestRate: rates[0],
+      fedexLive,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

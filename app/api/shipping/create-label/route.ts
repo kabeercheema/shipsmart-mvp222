@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import * as pdfLib from "@react-pdf/renderer";
+import { createFedExLabel, isFedExConfigured } from "@/lib/fedex";
 
 interface CreateLabelRequest {
   orderId: string;
@@ -64,11 +64,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate tracking number
-    const trackingNumber = `${carrier.substring(0, 2).toUpperCase()}${Date.now()}`;
+    let trackingNumber: string;
+    let labelPDF: Buffer;
+    let selectedService = service;
 
-    // Generate label PDF
-    const labelPDF = await generatePDFLabel(order, carrier, trackingNumber);
+    if (carrier.toLowerCase() === "fedex" && isFedExConfigured()) {
+      const fedexResult = await createFedExLabel({
+        serviceDisplayName: service,
+        rate,
+        order: {
+          fromName: order.fromName,
+          fromPhone: order.fromPhone,
+          fromAddressLine1: order.fromAddressLine1,
+          fromAddressLine2: order.fromAddressLine2,
+          fromCity: order.fromCity,
+          fromState: order.fromState,
+          fromZip: order.fromZip,
+          fromCountry: order.fromCountry,
+          toName: order.toName,
+          toPhone: order.toPhone,
+          toAddressLine1: order.toAddressLine1,
+          toAddressLine2: order.toAddressLine2,
+          toCity: order.toCity,
+          toState: order.toState,
+          toZip: order.toZip,
+          toCountry: order.toCountry,
+          weight: order.weight,
+          weightUnit: order.weightUnit,
+          length: order.length,
+          width: order.width,
+          height: order.height,
+          dimensionUnit: order.dimensionUnit,
+        },
+      });
+
+      trackingNumber = fedexResult.trackingNumber;
+      labelPDF = fedexResult.labelPdf;
+      selectedService = service;
+    } else {
+      // Generate tracking number
+      trackingNumber = `${carrier.substring(0, 2).toUpperCase()}${Date.now()}`;
+      // Generate label PDF
+      labelPDF = await generatePDFLabel(order, carrier, trackingNumber);
+    }
 
     // Create label in database
     const label = await prisma.label.create({
@@ -85,7 +123,7 @@ export async function POST(request: NextRequest) {
       where: { id: orderId },
       data: {
         selectedCarrier: carrier,
-        selectedService: service,
+        selectedService,
         selectedRate: rate,
         labelId: label.id,
         trackingNumber,
